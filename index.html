@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Architect Studio v4.0 | IDE Edition</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/ace.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.2/ext-language_tools.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --bg-panel: #1e293b;
+            --bg-editor: #1e1e1e; /* Ace Editor Default */
+            --border: #334155;
+            --primary: #3b82f6;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --text: #e2e8f0;
+            --text-muted: #94a3b8;
+            --font-ui: 'Tajawal', sans-serif;
+            --font-code: 'Fira Code', monospace;
+        }
+
+        * { box-sizing: border-box; outline: none; }
+        
+        body {
+            margin: 0;
+            background-color: var(--bg-dark);
+            color: var(--text);
+            font-family: var(--font-ui);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* ---------------- HEADER ---------------- */
+        header {
+            height: 55px;
+            background: rgba(30, 41, 59, 0.95);
+            border-bottom: 1px solid var(--border);
+            padding: 0 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 20;
+        }
+        
+        .brand { font-weight: 700; font-size: 1.1rem; display: flex; align-items: center; gap: 10px; }
+        .brand span { color: var(--primary); }
+        
+        .toolbar { display: flex; gap: 8px; }
+        
+        .btn {
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 0.4rem 0.8rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: var(--font-ui);
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+        .btn:hover { border-color: var(--text-muted); }
+        .btn-primary { background: var(--primary); border-color: var(--primary); color: white; }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-success { background: var(--success); border-color: var(--success); color: white; }
+        .btn-success:hover { background: #059669; }
+
+        /* ---------------- LAYOUT ---------------- */
+        .workspace {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: var(--bg-panel);
+            border-left: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            resize: horizontal; /* Resizable */
+            overflow: auto;
+            min-width: 200px;
+            max-width: 500px;
+        }
+
+        .search-box {
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+        .search-input {
+            width: 100%;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            color: white;
+            padding: 6px 10px;
+            border-radius: 4px;
+        }
+
+        .sidebar-content { flex: 1; overflow-y: auto; }
+        
+        .section-header {
+            padding: 8px 15px;
+            background: rgba(0,0,0,0.2);
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            user-select: none;
+        }
+        .section-header:hover { background: rgba(0,0,0,0.3); }
+
+        .nav-item {
+            padding: 6px 15px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 2px solid transparent;
+            color: #cbd5e1;
+        }
+        .nav-item:hover { background: rgba(255,255,255,0.05); color: white; }
+        .nav-item.active { background: rgba(59, 130, 246, 0.1); border-left-color: var(--primary); color: var(--primary); }
+        
+        .hidden { display: none !important; }
+
+        /* Middle: Editor */
+        .editor-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-editor);
+            position: relative;
+            min-width: 300px;
+        }
+
+        .editor-header {
+            height: 35px;
+            background: #2d2d2d;
+            border-bottom: 1px solid #404040;
+            display: flex;
+            align-items: center;
+            padding: 0 15px;
+            font-size: 0.8rem;
+            color: #ccc;
+            justify-content: space-between;
+        }
+
+        #aceEditor {
+            flex: 1;
+            font-size: 14px;
+        }
+
+        /* Right: Preview & Console */
+        .preview-container {
+            width: 40%;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border);
+            min-width: 300px;
+            resize: horizontal; /* Resizable from left because of RTL dir? No, tricky with flex. Used fixed for now */
+        }
+
+        .preview-header {
+            height: 35px;
+            background: #f1f5f9;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            padding: 0 15px;
+            justify-content: space-between;
+            color: #334155;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        iframe {
+            flex: 1;
+            width: 100%;
+            border: none;
+            background: white;
+        }
+
+        /* Console Panel */
+        .console-panel {
+            height: 150px;
+            background: #0d1117;
+            border-top: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }
+        .console-header {
+            padding: 5px 10px;
+            background: #161b22;
+            color: #8b949e;
+            font-size: 0.75rem;
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid #30363d;
+        }
+        .console-logs {
+            flex: 1;
+            overflow-y: auto;
+            padding: 5px;
+            font-family: var(--font-code);
+            font-size: 12px;
+        }
+        .log-line { padding: 2px 5px; border-bottom: 1px solid rgba(255,255,255,0.05); color: #c9d1d9; }
+        .log-error { color: #f85149; background: rgba(248, 81, 73, 0.1); }
+        .log-warn { color: #e3b341; }
+        .log-info { color: #58a6ff; }
+
+        /* Toast */
+        #toast {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: var(--success);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            transform: translateY(100px);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 1000;
+        }
+        
+        /* Badges */
+        .badge { font-size: 0.65rem; padding: 1px 5px; border-radius: 3px; background: rgba(255,255,255,0.1); margin-right: 5px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="brand">
+            <span>❖</span> Architect Studio <span style="font-size: 0.8rem; opacity: 0.6; margin-right: 5px;">v4.0 IDE</span>
+        </div>
+        <div class="toolbar">
+            <button class="btn" onclick="app.undo()"><span style="transform: scaleX(-1);">➜</span> تراجع</button>
+            <button class="btn" onclick="app.addLibrary('bootstrap')">+ Bootstrap</button>
+            <button class="btn" onclick="app.addLibrary('tailwind')">+ Tailwind</button>
+            <button class="btn" onclick="app.loadFromClipboard()">📋 لصق الكود</button>
+            <button class="btn btn-primary" onclick="app.exportProject()">📦 تصدير (Zip)</button>
+        </div>
+    </header>
+
+    <div class="workspace">
+        
+        <div class="sidebar">
+            <div class="search-box">
+                <input type="text" class="search-input" placeholder="بحث في المشروع..." onkeyup="app.filterSidebar(this.value)">
+            </div>
+            <div id="sidebarContent" class="sidebar-content">
+                <div style="padding: 2rem; text-align: center; opacity: 0.5; font-size: 0.8rem;">
+                    لا يوجد مشروع.<br>الصق الكود للبدء.
+                </div>
+            </div>
+        </div>
+
+        <div class="editor-container">
+            <div class="editor-header">
+                <span id="editorFileName">main.js</span>
+                <span id="saveStatus" style="font-size: 0.7rem; color: var(--success);">تم الحفظ تلقائياً</span>
+            </div>
+            <div id="aceEditor"></div>
+        </div>
+
+        <div class="preview-container">
+            <div class="preview-header">
+                <span>Live Preview</span>
+                <button onclick="app.refreshPreview()" style="background:none; border:none; cursor:pointer;">🔄</button>
+            </div>
+            <iframe id="previewFrame" sandbox="allow-scripts allow-modals allow-same-origin"></iframe>
+            
+            <div class="console-panel">
+                <div class="console-header">
+                    <span>Console Output</span>
+                    <span style="cursor: pointer;" onclick="document.getElementById('consoleLogs').innerHTML=''">Clear 🗑️</span>
+                </div>
+                <div id="consoleLogs" class="console-logs"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="toast">تمت العملية بنجاح</div>
+
+    <script>
+        /**
+         * Architect Studio v4.0 - IDE Engine
+         * Powered by Ace Editor & JSZip
+         */
+        class IDE {
+            constructor() {
+                this.editor = null;
+                this.activeId = null;
+                
+                // Data Store
+                this.project = {
+                    links: [],
+                    css: [],
+                    html: [],
+                    js: []
+                };
+
+                this.initAce();
+                this.loadFromStorage();
+            }
+
+            initAce() {
+                // Initialize Ace Editor
+                this.editor = ace.edit("aceEditor");
+                this.editor.setTheme("ace/theme/tomorrow_night_eighties");
+                this.editor.session.setMode("ace/mode/javascript");
+                this.editor.setOptions({
+                    fontSize: "14px",
+                    enableBasicAutocompletion: true,
+                    enableLiveAutocompletion: true,
+                    showLineNumbers: true,
+                    tabSize: 2,
+                    useWorker: false // Disable worker to run locally without blob issues
+                });
+
+                // Auto-save & Live Update Listener
+                let timeout;
+                this.editor.session.on('change', () => {
+                    clearTimeout(timeout);
+                    timeout = setTimeout(() => {
+                        this.saveCurrentChange();
+                    }, 800);
+                });
+            }
+
+            // --- 1. Parsing Logic (Updated for v4) ---
+            
+            async loadFromClipboard() {
+                try {
+                    const text = await navigator.clipboard.readText();
+                    if(text) this.parseProject(text);
+                } catch(e) { alert("Please manually paste (Ctrl+V) if button fails."); }
+            }
+
+            parseProject(rawCode) {
+                // Reset Data
+                this.project = { links: [], css: [], html: [], js: [] };
+                let tempCode = rawCode;
+
+                // A. Extract Links (Libraries)
+                const linkRegex = /<link[^>]+>/gi;
+                let linkMatch;
+                while ((linkMatch = linkRegex.exec(rawCode)) !== null) {
+                    this.project.links.push({
+                        id: `link_${this.project.links.length}`,
+                        content: linkMatch[0],
+                        name: this.getLinkName(linkMatch[0])
+                    });
+                }
+
+                // B. Extract CSS
+                const styleRegex = /<style[^>]*>([\s\S]*?)<\/style>/gi;
+                let match;
+                while ((match = styleRegex.exec(rawCode)) !== null) {
+                    this.project.css.push({
+                        id: `css_${this.project.css.length}`,
+                        content: match[1].trim(),
+                        fullTag: match[0]
+                    });
+                }
+
+                // C. Extract JS Functions
+                const scriptRegex = /<script[^>]*>([\s\S]*?)<\/script>/gi;
+                let jsBlockIndex = 0;
+                while ((match = scriptRegex.exec(rawCode)) !== null) {
+                    this.parseFunctions(match[1], jsBlockIndex);
+                    jsBlockIndex++;
+                }
+
+                // D. Extract HTML Components (Body children)
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(rawCode, 'text/html');
+                const bodyChildren = doc.body ? Array.from(doc.body.children) : [];
+                
+                if (bodyChildren.length > 0) {
+                    bodyChildren.forEach((child, idx) => {
+                        if(child.tagName === 'SCRIPT') return;
+                        let name = child.tagName.toLowerCase();
+                        if(child.id) name += ` #${child.id}`;
+                        else if(child.className) name += `.${child.className.split(' ')[0]}`;
+                        
+                        this.project.html.push({
+                            id: `html_${idx}`,
+                            name: name,
+                            content: child.outerHTML
+                        });
+                    });
+                } else {
+                     // Fallback for empty/text body
+                     this.project.html.push({
+                        id: 'html_main',
+                        name: 'Main Body',
+                        content: rawCode.replace(styleRegex, '').replace(scriptRegex, '').replace(linkRegex, '')
+                    });
+                }
+
+                this.renderSidebar();
+                this.refreshPreview();
+                this.saveToStorage();
+                this.showToast('تم تحليل المشروع بنجاح');
+            }
+
+            parseFunctions(scriptContent, blockIdx) {
+                const regex = /(?:function\s+([a-zA-Z0-9_$]+)|const\s+([a-zA-Z0-9_$]+)\s*=\s*\(|([a-zA-Z0-9_$]+)\s*=\s*function)/g;
+                // Simple block extraction for demo (Complex brace balancing used in v3 is better, kept simple here for speed)
+                // We will just store the Whole Script Block if parsing fails to find clear functions, or stick to v3 logic.
+                // Let's use v3 logic simplified:
+                
+                const funcStartRegex = /(?:function\s+([a-zA-Z0-9_$]+)\s*\(|([a-zA-Z0-9_$]+)\s*=\s*(?:async\s*)?(?:function\s*)?\(|([a-zA-Z0-9_$]+)\s*=\s*(?:async\s*)?\(?[^)]*\)?\s*=>)/g;
+                let match;
+                while ((match = funcStartRegex.exec(scriptContent)) !== null) {
+                    const name = match[1] || match[2] || match[3] || 'Anonymous';
+                    const startIndex = match.index;
+                    const openBrace = scriptContent.indexOf('{', startIndex);
+                    if(openBrace === -1) continue;
+                    
+                    let balance = 1; let endIndex = -1;
+                    for(let i = openBrace + 1; i < scriptContent.length; i++){
+                        if(scriptContent[i] === '{') balance++;
+                        if(scriptContent[i] === '}') balance--;
+                        if(balance === 0) { endIndex = i+1; break; }
+                    }
+                    
+                    if(endIndex !== -1) {
+                        const body = scriptContent.substring(startIndex, endIndex);
+                        this.project.js.push({
+                            id: `js_${blockIdx}_${this.project.js.length}`,
+                            name: name,
+                            type: this.getJsType(name),
+                            content: body
+                        });
+                    }
+                }
+            }
+
+            getJsType(name) {
+                const n = name.toLowerCase();
+                if(n.startsWith('on') || n.includes('click')) return 'Event';
+                if(n.includes('init')) return 'Init';
+                return 'Logic';
+            }
+
+            getLinkName(tag) {
+                if(tag.includes('bootstrap')) return 'Bootstrap';
+                if(tag.includes('tailwind')) return 'Tailwind';
+                if(tag.includes('font')) return 'Font/Icon';
+                return 'External CSS';
+            }
+
+            // --- 2. Sidebar & UI ---
+
+            renderSidebar() {
+                const container = document.getElementById('sidebarContent');
+                container.innerHTML = '';
+
+                this.createSection(container, 'External Libraries', this.project.links, 'link');
+                this.createSection(container, 'Styles (CSS)', this.project.css, 'css');
+                this.createSection(container, 'Components (HTML)', this.project.html, 'html');
+                
+                // Grouped JS
+                const jsTypes = { 'Init': [], 'Event': [], 'Logic': [] };
+                this.project.js.forEach(j => jsTypes[j.type] ? jsTypes[j.type].push(j) : jsTypes['Logic'].push(j));
+                
+                const jsSection = document.createElement('div');
+                jsSection.innerHTML = `<div class="section-header" onclick="this.nextElementSibling.classList.toggle('hidden')">Logic (JS) ▼</div><div class="group-content"></div>`;
+                const jsContent = jsSection.querySelector('.group-content');
+                
+                Object.keys(jsTypes).forEach(type => {
+                    if(jsTypes[type].length === 0) return;
+                    const header = document.createElement('div');
+                    header.style.padding = "4px 10px"; header.style.fontSize="0.7rem"; header.style.color="#666";
+                    header.textContent = type;
+                    jsContent.appendChild(header);
+                    jsTypes[type].forEach(item => {
+                        jsContent.appendChild(this.createNavItem(item, 'js'));
+                    });
+                });
+                if(this.project.js.length > 0) container.appendChild(jsSection);
+            }
+
+            createSection(parent, title, items, type) {
+                if(items.length === 0) return;
+                const div = document.createElement('div');
+                div.innerHTML = `
+                    <div class="section-header" onclick="this.nextElementSibling.classList.toggle('hidden')">${title} ▼</div>
+                    <div class="group-content"></div>
+                `;
+                const content = div.querySelector('.group-content');
+                items.forEach(item => content.appendChild(this.createNavItem(item, type)));
+                parent.appendChild(div);
+            }
+
+            createNavItem(item, type) {
+                const el = document.createElement('div');
+                el.className = 'nav-item';
+                el.innerText = item.name || `Block ${item.id}`;
+                el.onclick = () => {
+                    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                    el.classList.add('active');
+                    this.loadIntoEditor(item.id, type);
+                };
+                return el;
+            }
+
+            loadIntoEditor(id, type) {
+                this.activeId = id;
+                let item;
+                let mode = 'text';
+
+                if(type === 'css') { item = this.project.css.find(x=>x.id===id); mode='css'; }
+                else if(type === 'html') { item = this.project.html.find(x=>x.id===id); mode='html'; }
+                else if(type === 'js') { item = this.project.js.find(x=>x.id===id); mode='javascript'; }
+                else if(type === 'link') { item = this.project.links.find(x=>x.id===id); mode='html'; }
+
+                if(item) {
+                    this.editor.session.setMode(`ace/mode/${mode}`);
+                    this.editor.setValue(item.content, -1); // -1 moves cursor to start
+                    document.getElementById('editorFileName').innerText = `${item.name} (${type.toUpperCase()})`;
+                }
+            }
+
+            saveCurrentChange() {
+                if(!this.activeId) return;
+                const val = this.editor.getValue();
+                
+                // Update Project State
+                if(this.activeId.startsWith('css')) this.project.css.find(x=>x.id===this.activeId).content = val;
+                else if(this.activeId.startsWith('html')) this.project.html.find(x=>x.id===this.activeId).content = val;
+                else if(this.activeId.startsWith('js')) this.project.js.find(x=>x.id===this.activeId).content = val;
+                else if(this.activeId.startsWith('link')) this.project.links.find(x=>x.id===this.activeId).content = val;
+
+                this.refreshPreview();
+                this.saveToStorage();
+            }
+
+            // --- 3. Live Preview & Console ---
+
+            refreshPreview() {
+                const frame = document.getElementById('previewFrame');
+                const links = this.project.links.map(l => l.content).join('\n');
+                const css = this.project.css.map(c => c.content).join('\n');
+                const html = this.project.html.map(h => h.content).join('\n');
+                const js = this.project.js.map(j => j.content).join('\n\n');
+
+                // Console Interceptor Script
+                const consoleScript = `
+                    <script>
+                        (function(){
+                            const oldLog = console.log;
+                            const oldError = console.error;
+                            const oldWarn = console.warn;
+                            
+                            function send(type, args) {
+                                try {
+                                    const msg = Array.from(args).map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+                                    window.parent.postMessage({source: 'architect-console', type, msg}, '*');
+                                } catch(e){}
+                            }
+
+                            console.log = function(...args) { send('info', args); oldLog.apply(console, args); };
+                            console.error = function(...args) { send('error', args); oldError.apply(console, args); };
+                            console.warn = function(...args) { send('warn', args); oldWarn.apply(console, args); };
+                            
+                            window.onerror = function(msg, source, lineno) {
+                                send('error', [msg + ' (Line: ' + lineno + ')']);
+                            };
+                        })();
+                    <\/script>
+                `;
+
+                const doc = `
+                    <!DOCTYPE html>
+                    <html dir="rtl">
+                    <head>
+                        ${links}
+                        <style>${css}</style>
+                        ${consoleScript}
+                    </head>
+                    <body>
+                        ${html}
+                        <script>
+                            try {
+                                ${js}
+                            } catch(e) { console.error(e); }
+                        <\/script>
+                    </body>
+                    </html>
+                `;
+
+                frame.srcdoc = doc;
+            }
+
+            // --- 4. Utilities ---
+
+            addLibrary(lib) {
+                let tag = '';
+                if(lib === 'bootstrap') tag = '<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">';
+                if(lib === 'tailwind') tag = '<script src="https://cdn.tailwindcss.com"><\/script>';
+                
+                // Add to Links array
+                this.project.links.push({
+                    id: `link_${Date.now()}`,
+                    content: tag,
+                    name: lib.charAt(0).toUpperCase() + lib.slice(1)
+                });
+                this.renderSidebar();
+                this.refreshPreview();
+                this.showToast(`${lib} Added!`);
+            }
+
+            exportProject() {
+                const zip = new JSZip();
+                
+                // 1. HTML
+                const links = this.project.links.map(l => l.content).join('\n    ');
+                const htmlBody = this.project.html.map(h => h.content).join('\n    ');
+                const indexHtml = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exported Project</title>
+    ${links}
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    ${htmlBody}
+    <script src="script.js"><\/script>
+</body>
+</html>`;
+                
+                // 2. CSS
+                const cssContent = this.project.css.map(c => c.content).join('\n\n');
+                
+                // 3. JS
+                const jsContent = this.project.js.map(j => `// ${j.name}\n${j.content}`).join('\n\n');
+
+                zip.file("index.html", indexHtml);
+                zip.file("style.css", cssContent);
+                zip.file("script.js", jsContent);
+
+                zip.generateAsync({type:"blob"}).then(function(content) {
+                    saveAs(content, "project-architect.zip");
+                });
+            }
+
+            saveToStorage() {
+                localStorage.setItem('architect_project', JSON.stringify(this.project));
+            }
+
+            loadFromStorage() {
+                const data = localStorage.getItem('architect_project');
+                if(data) {
+                    try {
+                        this.project = JSON.parse(data);
+                        this.renderSidebar();
+                        this.refreshPreview();
+                    } catch(e) {}
+                }
+            }
+
+            undo() { this.editor.undo(); }
+            
+            showToast(msg) {
+                const t = document.getElementById('toast');
+                t.innerText = msg;
+                t.style.transform = "translateY(0)";
+                setTimeout(() => t.style.transform = "translateY(100px)", 3000);
+            }
+
+            filterSidebar(query) {
+                const q = query.toLowerCase();
+                document.querySelectorAll('.nav-item').forEach(el => {
+                    el.style.display = el.innerText.toLowerCase().includes(q) ? 'flex' : 'none';
+                });
+            }
+        }
+
+        // --- Console Message Listener ---
+        window.addEventListener('message', (e) => {
+            if (e.data && e.data.source === 'architect-console') {
+                const logDiv = document.createElement('div');
+                logDiv.className = `log-line log-${e.data.type}`;
+                logDiv.innerText = `[${e.data.type.toUpperCase()}] ${e.data.msg}`;
+                const panel = document.getElementById('consoleLogs');
+                panel.appendChild(logDiv);
+                panel.scrollTop = panel.scrollHeight;
+            }
+        });
+
+        // Initialize
+        const app = new IDE();
+
+    </script>
+</body>
+</html>
